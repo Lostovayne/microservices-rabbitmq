@@ -4,6 +4,9 @@ import { OrdersService } from './orders.service';
 import { ConfigModule } from '@nestjs/config';
 import * as Joi from 'joi';
 import { DatabaseModule } from '@app/common';
+import { OrdersRepository } from './orders.repository';
+import { MongooseModule } from '@nestjs/mongoose';
+import { OrderSchema } from './schemas/order.schema';
 
 @Module({
   imports: [
@@ -15,8 +18,9 @@ import { DatabaseModule } from '@app/common';
       envFilePath: ['./apps/orders/.env'],
     }),
     DatabaseModule,
+    MongooseModule.forFeature([{ name: 'Order', schema: OrderSchema }]),
   ],
   controllers: [OrdersController],
-  providers: [OrdersService],
+  providers: [OrdersService, OrdersRepository],
 })
 export class OrdersModule {}
