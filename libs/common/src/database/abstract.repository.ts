@@ -1,5 +1,6 @@
 import { Logger, NotFoundException } from '@nestjs/common';
 import {
+  ClientSession,
   Connection,
   FilterQuery,
   Model,
@@ -38,13 +39,13 @@ export abstract class AbstractRepository<TDocument extends AbstractDocument> {
       throw new NotFoundException('Document not found.');
     }
 
-    return document;
+    return document as TDocument;
   }
 
   async findOneAndUpdate(
     filterQuery: FilterQuery<TDocument>,
     update: UpdateQuery<TDocument>,
-  ) {
+  ): Promise<TDocument> {
     const document = await this.model.findOneAndUpdate(filterQuery, update, {
       lean: true,
       new: true,
@@ -55,25 +56,27 @@ export abstract class AbstractRepository<TDocument extends AbstractDocument> {
       throw new NotFoundException('Document not found.');
     }
 
-    return document;
+    return document as TDocument;
   }
 
   async upsert(
     filterQuery: FilterQuery<TDocument>,
     document: Partial<TDocument>,
-  ) {
+  ): Promise<TDocument | null> {
     return this.model.findOneAndUpdate(filterQuery, document, {
       lean: true,
       upsert: true,
       new: true,
-    });
+    }) as Promise<TDocument>;
   }
 
-  async find(filterQuery: FilterQuery<TDocument>) {
-    return this.model.find(filterQuery, {}, { lean: true });
+  async find(filterQuery: FilterQuery<TDocument>): Promise<TDocument[]> {
+    return this.model.find(filterQuery, {}, { lean: true }) as Promise<
+      TDocument[]
+    >;
   }
 
-  async startTransaction() {
+  async startTransaction(): Promise<ClientSession> {
     const session = await this.connection.startSession();
     session.startTransaction();
     return session;
