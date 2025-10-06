@@ -1,33 +1,395 @@
 # 🚀 Ordering App - Microservices Architecture
 
-A scalable microservices application built with **NestJS**, **MongoDB Replica Set**, and **RabbitMQ** for event-driven communication.
+A production-ready microservices application built with **NestJS**, **MongoDB Replica Set**, and **RabbitMQ** for event-driven communication.
+
+## 📋 Table of Contents
+
+- [Architecture Overview](#-architecture-overview)
+- [System Architecture Diagram](#-system-architecture-diagram)
+- [MongoDB Replica Set](#-mongodb-replica-set-architecture)
+- [RabbitMQ Event Flow](#-rabbitmq-event-flow)
+- [Technologies Stack](#-technologies-stack)
+- [Prerequisites](#-prerequisites)
+- [Quick Start](#-quick-start)
+- [Project Structure](#-project-structure)
+- [Environment Configuration](#-environment-configuration)
+- [Docker Commands](#-docker-commands)
+- [Deployment](#-deployment-to-production)
+- [Troubleshooting](#-troubleshooting)
+
+---
 
 ## 🏗️ Architecture Overview
 
-This application consists of three microservices:
+This application implements a **microservices architecture** with event-driven communication, consisting of three independent services:
 
-- **🛒 Orders Service** (`port 3000`) - Handles order creation and management
-- **🔐 Auth Service** - Manages user authentication and authorization
-- **💳 Billing Service** - Processes payments and billing operations
+| Service        | Port   | Description                   | Repository Pattern     |
+| -------------- | ------ | ----------------------------- | ---------------------- |
+| **🛒 Orders**  | `3000` | Order creation and management | ✅ Abstract Repository |
+| **🔐 Auth**    | TBD    | User authentication & JWT     | ✅ Planned             |
+| **💳 Billing** | N/A    | Payment processing via events | ✅ Event-driven        |
 
-### Event-Driven Communication
+### Key Features
 
-Services communicate asynchronously through **RabbitMQ** using the AMQP protocol, ensuring loose coupling and high scalability.
+- ✅ **Event-Driven Architecture** with RabbitMQ
+- ✅ **High Availability** with MongoDB Replica Set (3 nodes)
+- ✅ **Hot Reload** in Docker for development
+- ✅ **Repository Pattern** for database abstraction
+- ✅ **Shared Common Libraries** (Database, RMQ)
+- ✅ **TypeScript** with strict type checking
+- ✅ **Monorepo** structure with PNPM workspaces
 
-### Data Layer
+---
 
-- **MongoDB Replica Set** with Primary, Secondary, and Arbiter nodes for high availability
-- **Bitnami Secure Images** for enhanced security and automatic updates
+## 🎯 System Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Client Layer                             │
+│                    (HTTP Requests - Port 3000)                   │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                      🛒 Orders Service                           │
+│                                                                   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
+│  │  Controller  │───→│   Service    │───→│  Repository  │      │
+│  └──────────────┘    └──────────────┘    └──────────────┘      │
+│                              │                    │              │
+│                              │ Emit Event         │ Read/Write   │
+│                              ↓                    ↓              │
+└─────────────────────────────────────────────────────────────────┘
+                                │                    │
+                    ┌───────────┴────────┐          │
+                    ↓                    ↓          ↓
+        ┌─────────────────────┐   ┌──────────────────────────┐
+        │   🐰 RabbitMQ       │   │   🍃 MongoDB Replica Set │
+        │                     │   │                          │
+        │  Exchange: billing  │   │  ┌────────────────────┐ │
+        │  Queue: billing     │   │  │  mongodb-primary   │ │
+        │  Routing: billing   │   │  │  (Write + Read)    │ │
+        └─────────────────────┘   │  └────────────────────┘ │
+                    │             │           │              │
+                    │             │           │ Replication  │
+                    ↓             │           ↓              │
+        ┌─────────────────────┐   │  ┌────────────────────┐ │
+        │  💳 Billing Service │   │  │ mongodb-secondary  │ │
+        │                     │   │  │  (Read Replica)    │ │
+        │  ┌──────────────┐  │   │  └────────────────────┘ │
+        │  │ Event Handler│  │   │           │              │
+        │  └──────────────┘  │   │           │ Vote only    │
+        │         │           │   │           ↓              │
+        │         ↓           │   │  ┌────────────────────┐ │
+        │  Process Payment    │   │  │  mongodb-arbiter   │ │
+        │  (Business Logic)   │   │  │  (No data stored)  │ │
+        └─────────────────────┘   │  └────────────────────┘ │
+                                  └──────────────────────────┘
+```
+
+### Communication Flow
+
+1. **Client → Orders Service** (HTTP POST `/orders`)
+2. **Orders Service → MongoDB Primary** (Save order to database)
+3. **Orders Service → RabbitMQ** (Emit `order_created` event)
+4. **RabbitMQ → Billing Service** (Deliver event to subscriber)
+5. **Billing Service** (Process payment logic)
+
+---
+
+## 🍃 MongoDB Replica Set Architecture
+
+### What is a Replica Set?
+
+A **MongoDB Replica Set** is a group of MongoDB instances that maintain the same data, providing **high availability** and **data redundancy**.
+
+### Our Configuration (3-Node Replica Set)
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                    MongoDB Replica Set                          │
+│                    Name: "replicaset"                           │
+└────────────────────────────────────────────────────────────────┘
+                                │
+        ┌───────────────────────┼───────────────────────┐
+        │                       │                       │
+        ↓                       ↓                       ↓
+┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
+│ mongodb-primary  │   │mongodb-secondary │   │ mongodb-arbiter  │
+│                  │   │                  │   │                  │
+│ 📝 Role: PRIMARY │   │ 📖 Role: SECONDARY│   │ ⚖️ Role: ARBITER │
+│                  │   │                  │   │                  │
+│ Port: 27017      │   │ Port: 27017      │   │ Port: 27017      │
+│                  │   │                  │   │                  │
+│ ✅ Writes        │   │ ❌ No Writes     │   │ ❌ No Writes     │
+│ ✅ Reads         │   │ ✅ Reads (opt)   │   │ ❌ No Reads      │
+│ ✅ Votes         │   │ ✅ Votes         │   │ ✅ Votes         │
+│ 💾 Stores Data   │   │ 💾 Stores Data   │   │ ⭕ No Data       │
+│                  │   │                  │   │                  │
+│ Volume:          │   │ (In-memory)      │   │ (No volume)      │
+│ mongodb_master_  │   │                  │   │                  │
+│ data             │   │                  │   │                  │
+└──────────────────┘   └──────────────────┘   └──────────────────┘
+         │                      ↑                      │
+         │  Replication Stream  │                      │
+         └──────────────────────┘                      │
+                                                        │
+              Election Process (if Primary fails)      │
+         ┌──────────────────────────────────────────────┘
+         │
+         ↓
+┌────────────────────────────────────────────────────────────────┐
+│              Automatic Failover Process                         │
+│                                                                  │
+│  1. Primary node fails or becomes unreachable                   │
+│  2. Secondary and Arbiter detect the failure                    │
+│  3. Election starts (2 votes needed: Secondary + Arbiter)       │
+│  4. Secondary is promoted to PRIMARY                            │
+│  5. Services automatically reconnect to new PRIMARY             │
+│  6. System continues operating without downtime                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Key Environment Variables
+
+```yaml
+# mongodb-primary
+MONGODB_REPLICA_SET_MODE=primary        # Defines role
+MONGODB_ROOT_PASSWORD=password123       # Authentication
+MONGODB_REPLICA_SET_KEY=replicasetkey123  # Shared secret for cluster
+
+# mongodb-secondary
+MONGODB_REPLICA_SET_MODE=secondary      # Defines role
+MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary  # Connect to primary
+MONGODB_REPLICA_SET_KEY=replicasetkey123  # MUST match primary
+
+# mongodb-arbiter
+MONGODB_REPLICA_SET_MODE=arbiter        # Defines role (no data)
+MONGODB_INITIAL_PRIMARY_HOST=mongodb-primary
+MONGODB_REPLICA_SET_KEY=replicasetkey123  # MUST match primary
+```
+
+### Benefits of Replica Set
+
+| Feature               | Single MongoDB             | Replica Set (Our Setup)    |
+| --------------------- | -------------------------- | -------------------------- |
+| **High Availability** | ❌ Single point of failure | ✅ Automatic failover      |
+| **Data Redundancy**   | ❌ No backup               | ✅ Real-time replication   |
+| **Read Scaling**      | ❌ Limited                 | ✅ Read from secondaries   |
+| **Zero Downtime**     | ❌ Manual recovery         | ✅ Auto-recovery (~10-30s) |
+| **Production Ready**  | ⚠️ Not recommended         | ✅ Industry standard       |
+
+---
+
+## 🐰 RabbitMQ Event Flow
+
+### Architecture Pattern: Event-Driven Microservices
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                         Event Flow                              │
+└────────────────────────────────────────────────────────────────┘
+
+Step 1: Order Created
+━━━━━━━━━━━━━━━━━━━━━━
+┌──────────────┐
+│ Orders Service│
+│              │
+│ POST /orders │
+└──────┬───────┘
+       │ 1. Save to MongoDB
+       │ 2. Emit event
+       ↓
+┌──────────────────────────────────────────────────────────────┐
+│                      RabbitMQ Broker                          │
+│                                                                │
+│  ┌─────────────────────────────────────────────────────┐     │
+│  │            Exchange: "billing"                      │     │
+│  │            Type: Direct                              │     │
+│  └────────────────────┬────────────────────────────────┘     │
+│                       │ Routing Key: "billing"               │
+│                       ↓                                       │
+│  ┌─────────────────────────────────────────────────────┐     │
+│  │            Queue: "billing"                         │     │
+│  │            Messages: [order_created]                │     │
+│  │            Durable: true                            │     │
+│  │            Auto-ack: false (manual ack)             │     │
+│  └─────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────┘
+                       │
+                       │ 3. Consume event
+                       ↓
+              ┌─────────────────┐
+              │ Billing Service │
+              │                 │
+              │ @EventPattern   │
+              │ ('order_created')│
+              │                 │
+              │ Process Payment │
+              └─────────────────┘
+```
+
+### RabbitMQ Configuration in Code
+
+#### 1️⃣ **Orders Service** (Producer)
+
+```typescript
+// apps/orders/src/orders.module.ts
+import { RmqModule } from '@app/common';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    DatabaseModule,
+    // Register RabbitMQ client for billing
+    RmqModule.register({
+      name: 'BILLING', // Client identifier
+    }),
+  ],
+  controllers: [OrdersController],
+  providers: [OrdersService, OrdersRepository],
+})
+export class OrdersModule {}
+```
+
+```typescript
+// apps/orders/src/orders.controller.ts
+@Controller('orders')
+export class OrdersController {
+  constructor(@Inject('BILLING') private billingClient: ClientProxy) {}
+
+  @Post()
+  async createOrder(@Body() request: CreateOrderRequest) {
+    const order = await this.ordersService.createOrder(request);
+
+    // Emit event to RabbitMQ
+    this.billingClient.emit('order_created', order);
+
+    return order;
+  }
+}
+```
+
+#### 2️⃣ **Billing Service** (Consumer)
+
+```typescript
+// apps/billing/src/billing.module.ts
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    RmqModule, // Import RMQ utilities
+  ],
+  controllers: [BillingController],
+  providers: [BillingService],
+})
+export class BillingModule {}
+```
+
+```typescript
+// apps/billing/src/main.ts
+async function bootstrap() {
+  const app = await NestFactory.create(BillingModule);
+  const rmqService = app.get<RmqService>(RmqService);
+
+  // Connect to RabbitMQ as microservice
+  app.connectMicroservice(rmqService.getOptions('BILLING'));
+
+  await app.startAllMicroservices();
+}
+```
+
+```typescript
+// apps/billing/src/billing.controller.ts
+@Controller()
+export class BillingController {
+  @EventPattern('order_created')
+  async handleOrderCreated(@Payload() data: any) {
+    console.log('📦 Received order:', data);
+    return this.billingService.processPayment(data);
+  }
+}
+```
+
+#### 3️⃣ **Shared RMQ Service** (Common Library)
+
+```typescript
+// libs/common/src/rmq/rmq.service.ts
+@Injectable()
+export class RmqService {
+  constructor(private readonly configService: ConfigService) {}
+
+  getOptions(queue: string, noAck = false): RmqOptions {
+    return {
+      transport: Transport.RMQ,
+      options: {
+        urls: [this.configService.get<string>('RABBIT_MQ_URI')],
+        queue: this.configService.get<string>(`RABBIT_MQ_${queue}_QUEUE`),
+        noAck,
+        persistent: true,
+      },
+    };
+  }
+}
+```
+
+### Message Flow Example
+
+```typescript
+// 1. Client creates order
+POST http://localhost:3000/orders
+{
+  "name": "Premium Coffee",
+  "price": 19.99,
+  "phoneNumber": "+1234567890"
+}
+
+// 2. Orders Service saves to MongoDB
+Order { _id: "...", name: "Premium Coffee", price: 19.99 }
+
+// 3. Orders Service emits event to RabbitMQ
+billingClient.emit('order_created', {
+  _id: "...",
+  name: "Premium Coffee",
+  price: 19.99,
+  phoneNumber: "+1234567890"
+})
+
+// 4. RabbitMQ routes to "billing" queue
+
+// 5. Billing Service receives event
+@EventPattern('order_created')
+handleOrderCreated(order) {
+  // Process payment logic
+  console.log('💳 Processing payment for', order.price);
+}
+```
+
+---
 
 ## 🛠️ Technologies Stack
 
-- **Framework**: NestJS (Node.js)
-- **Database**: MongoDB with Replica Set
-- **Message Broker**: RabbitMQ (AMQP)
-- **Package Manager**: PNPM
-- **Containerization**: Docker & Docker Compose
-- **Language**: TypeScript
-- **Database Images**: Bitnami Secure MongoDB
+### Core Technologies
+
+| Technology     | Version   | Purpose              |
+| -------------- | --------- | -------------------- |
+| **NestJS**     | `^10.0.0` | Backend framework    |
+| **TypeScript** | `^5.1.3`  | Type-safe JavaScript |
+| **MongoDB**    | `6.0`     | NoSQL database       |
+| **RabbitMQ**   | `latest`  | Message broker       |
+| **Docker**     | `24+`     | Containerization     |
+| **PNPM**       | `8+`      | Package manager      |
+
+### Key Libraries
+
+```json
+{
+  "@nestjs/microservices": "^10.0.0", // Microservices support
+  "@nestjs/mongoose": "^10.0.0", // MongoDB integration
+  "amqplib": "^0.10.3", // RabbitMQ client
+  "amqp-connection-manager": "^4.1.14", // Connection management
+  "joi": "^17.9.0" // Environment validation
+}
+```
 
 ## 📋 Prerequisites
 
