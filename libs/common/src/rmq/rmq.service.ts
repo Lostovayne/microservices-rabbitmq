@@ -1,5 +1,6 @@
+/** biome-ignore-all lint/style/useImportType: Biome me estaba trolleando */
 import { Injectable } from '@nestjs/common';
-import type { ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { type RmqOptions, Transport } from '@nestjs/microservices';
 
 @Injectable()
