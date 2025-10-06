@@ -43,48 +43,51 @@ This application implements a **microservices architecture** with event-driven c
 
 ## 🎯 System Architecture Diagram
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Client Layer                             │
-│                    (HTTP Requests - Port 3000)                   │
-└─────────────────────────────────────────────────────────────────┘
-                                │
-                                ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                      🛒 Orders Service                           │
-│                                                                   │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │  Controller  │───→│   Service    │───→│  Repository  │      │
-│  └──────────────┘    └──────────────┘    └──────────────┘      │
-│                              │                    │              │
-│                              │ Emit Event         │ Read/Write   │
-│                              ↓                    ↓              │
-└─────────────────────────────────────────────────────────────────┘
-                                │                    │
-                    ┌───────────┴────────┐          │
-                    ↓                    ↓          ↓
-        ┌─────────────────────┐   ┌──────────────────────────┐
-        │   🐰 RabbitMQ       │   │   🍃 MongoDB Replica Set │
-        │                     │   │                          │
-        │  Exchange: billing  │   │  ┌────────────────────┐ │
-        │  Queue: billing     │   │  │  mongodb-primary   │ │
-        │  Routing: billing   │   │  │  (Write + Read)    │ │
-        └─────────────────────┘   │  └────────────────────┘ │
-                    │             │           │              │
-                    │             │           │ Replication  │
-                    ↓             │           ↓              │
-        ┌─────────────────────┐   │  ┌────────────────────┐ │
-        │  💳 Billing Service │   │  │ mongodb-secondary  │ │
-        │                     │   │  │  (Read Replica)    │ │
-        │  ┌──────────────┐  │   │  └────────────────────┘ │
-        │  │ Event Handler│  │   │           │              │
-        │  └──────────────┘  │   │           │ Vote only    │
-        │         │           │   │           ↓              │
-        │         ↓           │   │  ┌────────────────────┐ │
-        │  Process Payment    │   │  │  mongodb-arbiter   │ │
-        │  (Business Logic)   │   │  │  (No data stored)  │ │
-        └─────────────────────┘   │  └────────────────────┘ │
-                                  └──────────────────────────┘
+```mermaid
+graph TB
+    subgraph Client["👤 Client Layer"]
+        HTTP["HTTP Requests<br/>Port 3000"]
+    end
+
+    subgraph Orders["🛒 Orders Service"]
+        Controller["Controller"] --> Service["Service"]
+        Service --> Repository["Repository"]
+        Service --> EmitEvent["Emit Event"]
+    end
+
+    subgraph RabbitMQ["🐰 RabbitMQ"]
+        Exchange["Exchange: billing"]
+        Queue["Queue: billing"]
+        Routing["Routing: billing"]
+        Exchange --> Queue
+    end
+
+    subgraph MongoDB["🍃 MongoDB Replica Set"]
+        Primary[("mongodb-primary<br/>Write + Read")]
+        Secondary[("mongodb-secondary<br/>Read Replica")]
+        Arbiter[("mongodb-arbiter<br/>No data stored")]
+        Primary -."Replication".-> Secondary
+        Primary -."Vote".-> Arbiter
+        Secondary -."Vote".-> Arbiter
+    end
+
+    subgraph Billing["💳 Billing Service"]
+        EventHandler["Event Handler"]
+        ProcessPayment["Process Payment<br/>Business Logic"]
+        EventHandler --> ProcessPayment
+    end
+
+    HTTP --> Controller
+    Repository -->|"Read/Write"| Primary
+    EmitEvent --> Exchange
+    Queue --> EventHandler
+    ProcessPayment -.->|"Log/Store"| Primary
+
+    style Client fill:#e1f5ff
+    style Orders fill:#fff4e1
+    style RabbitMQ fill:#ffe1f5
+    style MongoDB fill:#e1ffe1
+    style Billing fill:#f5e1ff
 ```
 
 ### Communication Flow
@@ -105,49 +108,37 @@ A **MongoDB Replica Set** is a group of MongoDB instances that maintain the same
 
 ### Our Configuration (3-Node Replica Set)
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                    MongoDB Replica Set                          │
-│                    Name: "replicaset"                           │
-└────────────────────────────────────────────────────────────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        │                       │                       │
-        ↓                       ↓                       ↓
-┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
-│ mongodb-primary  │   │mongodb-secondary │   │ mongodb-arbiter  │
-│                  │   │                  │   │                  │
-│ 📝 Role: PRIMARY │   │ 📖 Role: SECONDARY│   │ ⚖️ Role: ARBITER │
-│                  │   │                  │   │                  │
-│ Port: 27017      │   │ Port: 27017      │   │ Port: 27017      │
-│                  │   │                  │   │                  │
-│ ✅ Writes        │   │ ❌ No Writes     │   │ ❌ No Writes     │
-│ ✅ Reads         │   │ ✅ Reads (opt)   │   │ ❌ No Reads      │
-│ ✅ Votes         │   │ ✅ Votes         │   │ ✅ Votes         │
-│ 💾 Stores Data   │   │ 💾 Stores Data   │   │ ⭕ No Data       │
-│                  │   │                  │   │                  │
-│ Volume:          │   │ (In-memory)      │   │ (No volume)      │
-│ mongodb_master_  │   │                  │   │                  │
-│ data             │   │                  │   │                  │
-└──────────────────┘   └──────────────────┘   └──────────────────┘
-         │                      ↑                      │
-         │  Replication Stream  │                      │
-         └──────────────────────┘                      │
-                                                        │
-              Election Process (if Primary fails)      │
-         ┌──────────────────────────────────────────────┘
-         │
-         ↓
-┌────────────────────────────────────────────────────────────────┐
-│              Automatic Failover Process                         │
-│                                                                  │
-│  1. Primary node fails or becomes unreachable                   │
-│  2. Secondary and Arbiter detect the failure                    │
-│  3. Election starts (2 votes needed: Secondary + Arbiter)       │
-│  4. Secondary is promoted to PRIMARY                            │
-│  5. Services automatically reconnect to new PRIMARY             │
-│  6. System continues operating without downtime                 │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph ReplicaSet["MongoDB Replica Set: 'replicaset'"]
+        Primary["📝 mongodb-primary<br/>━━━━━━━━━━━━━━<br/>Role: PRIMARY<br/>Port: 27017<br/>━━━━━━━━━━━━━━<br/>✅ Writes<br/>✅ Reads<br/>✅ Votes<br/>💾 Stores Data<br/>━━━━━━━━━━━━━━<br/>Volume: mongodb_master_data"]
+
+        Secondary["� mongodb-secondary<br/>━━━━━━━━━━━━━━<br/>Role: SECONDARY<br/>Port: 27017<br/>━━━━━━━━━━━━━━<br/>❌ No Writes<br/>✅ Reads (optional)<br/>✅ Votes<br/>💾 Stores Data<br/>━━━━━━━━━━━━━━<br/>(In-memory)"]
+
+        Arbiter["⚖️ mongodb-arbiter<br/>━━━━━━━━━━━━━━<br/>Role: ARBITER<br/>Port: 27017<br/>━━━━━━━━━━━━━━<br/>❌ No Writes<br/>❌ No Reads<br/>✅ Votes<br/>⭕ No Data<br/>━━━━━━━━━━━━━━<br/>(No volume)"]
+
+        Primary <-->|"Replication Stream"| Secondary
+        Primary <-->|"Heartbeat"| Arbiter
+        Secondary <-->|"Heartbeat"| Arbiter
+    end
+
+    subgraph Failover["⚡ Automatic Failover Process"]
+        Step1["1️⃣ Primary fails<br/>or unreachable"]
+        Step2["2️⃣ Secondary & Arbiter<br/>detect failure"]
+        Step3["3️⃣ Election starts<br/>2 votes needed"]
+        Step4["4️⃣ Secondary promoted<br/>to PRIMARY"]
+        Step5["5️⃣ Services reconnect<br/>to new PRIMARY"]
+        Step6["6️⃣ System continues<br/>without downtime"]
+
+        Step1 --> Step2 --> Step3 --> Step4 --> Step5 --> Step6
+    end
+
+    Primary -."If fails".-> Step1
+
+    style Primary fill:#4CAF50,color:#fff
+    style Secondary fill:#2196F3,color:#fff
+    style Arbiter fill:#FF9800,color:#fff
+    style Failover fill:#f5f5f5
 ```
 
 ### Key Environment Variables
@@ -185,75 +176,53 @@ MONGODB_REPLICA_SET_KEY=replicasetkey123  # MUST match primary
 
 ### Architecture Pattern: Event-Driven Microservices
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│                         Event Flow                              │
-└────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Orders as 🛒 Orders Service
+    participant MongoDB as 🍃 MongoDB
+    participant RabbitMQ as 🐰 RabbitMQ Broker
+    participant Exchange as Exchange: billing
+    participant Queue as Queue: billing
+    participant Billing as 💳 Billing Service
 
-Step 1: Order Created
-━━━━━━━━━━━━━━━━━━━━━━
-┌──────────────┐
-│ Orders Service│
-│              │
-│ POST /orders │
-└──────┬───────┘
-       │ 1. Save to MongoDB
-       │ 2. Emit event
-       ↓
-┌──────────────────────────────────────────────────────────────┐
-│                      RabbitMQ Broker                          │
-│                                                                │
-│  ┌─────────────────────────────────────────────────────┐     │
-│  │            Exchange: "billing"                      │     │
-│  │            Type: Direct                              │     │
-│  └────────────────────┬────────────────────────────────┘     │
-│                       │ Routing Key: "billing"               │
-│                       ↓                                       │
-│  ┌─────────────────────────────────────────────────────┐     │
-│  │            Queue: "billing"                         │     │
-│  │            Messages: [order_created]                │     │
-│  │            Durable: true                            │     │
-│  │            Auto-ack: false (manual ack)             │     │
-│  └─────────────────────────────────────────────────────┘     │
-└──────────────────────────────────────────────────────────────┘
-                       │
-                       │ 3. Consume event
-                       ↓
-              ┌─────────────────┐
-              │ Billing Service │
-              │                 │
-              │ @EventPattern   │
-              │ ('order_created')│
-              │                 │
-              │ Process Payment │
-              └─────────────────┘
-```
+    Client->>Orders: POST /orders<br/>{name, price, phone}
 
-### RabbitMQ Configuration in Code
+    Note over Orders: Step 1: Save Order
+    Orders->>MongoDB: Save order document
+    MongoDB-->>Orders: Order saved ✅
+
+    Note over Orders: Step 2: Emit Event
+    Orders->>RabbitMQ: emit('order_created', order)
+
+    Note over RabbitMQ,Exchange: RabbitMQ Routing
+    RabbitMQ->>Exchange: Route to Exchange<br/>Type: Direct
+    Exchange->>Queue: Routing Key: "billing"<br/>Durable: true
+
+    Note over Queue: Messages queued<br/>Auto-ack: false
+
+    Note over Billing: Step 3: Consume Event
+    Queue->>Billing: Deliver 'order_created' event
+
+    Note over Billing: @EventPattern<br/>('order_created')
+    Billing->>Billing: Process Payment Logic
+    Billing-->>Queue: Acknowledge (ACK)
+
+    Orders-->>Client: 201 Created<br/>Order response
+
+    Note over Client,Billing: ✅ Event-Driven Flow Complete
+```
 
 #### 1️⃣ **Orders Service** (Producer)
 
-```typescript
-// apps/orders/src/orders.module.ts
-import { RmqModule } from '@app/common';
-
-@Module({
+````typescript
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
-    // Register RabbitMQ client for billing
-    RmqModule.register({
-      name: 'BILLING', // Client identifier
-    }),
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrdersRepository],
-})
-export class OrdersModule {}
-```
-
 ```typescript
-// apps/orders/src/orders.controller.ts
 @Controller('orders')
 export class OrdersController {
   constructor(@Inject('BILLING') private billingClient: ClientProxy) {}
@@ -268,7 +237,7 @@ export class OrdersController {
     return order;
   }
 }
-```
+````
 
 #### 2️⃣ **Billing Service** (Consumer)
 
