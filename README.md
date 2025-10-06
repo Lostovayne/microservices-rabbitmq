@@ -1,98 +1,279 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🚀 Ordering App - Microservices Architecture
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A scalable microservices application built with **NestJS**, **MongoDB Replica Set**, and **RabbitMQ** for event-driven communication.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🏗️ Architecture Overview
 
-## Description
+This application consists of three microservices:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **🛒 Orders Service** (`port 3000`) - Handles order creation and management
+- **🔐 Auth Service** - Manages user authentication and authorization
+- **💳 Billing Service** - Processes payments and billing operations
 
-## Project setup
+### Event-Driven Communication
 
-```bash
-$ pnpm install
-```
+Services communicate asynchronously through **RabbitMQ** using the AMQP protocol, ensuring loose coupling and high scalability.
 
-## Compile and run the project
+### Data Layer
 
-```bash
-# development
-$ pnpm run start
+- **MongoDB Replica Set** with Primary, Secondary, and Arbiter nodes for high availability
+- **Bitnami Secure Images** for enhanced security and automatic updates
 
-# watch mode
-$ pnpm run start:dev
+## 🛠️ Technologies Stack
 
-# production mode
-$ pnpm run start:prod
-```
+- **Framework**: NestJS (Node.js)
+- **Database**: MongoDB with Replica Set
+- **Message Broker**: RabbitMQ (AMQP)
+- **Package Manager**: PNPM
+- **Containerization**: Docker & Docker Compose
+- **Language**: TypeScript
+- **Database Images**: Bitnami Secure MongoDB
 
-## Run tests
+## 📋 Prerequisites
+
+Make sure you have the following installed:
+
+- [Node.js](https://nodejs.org/) (v18+ recommended)
+- [PNPM](https://pnpm.io/) package manager
+- [Docker](https://www.docker.com/) and Docker Compose
+- [Git](https://git-scm.com/)
+
+## 🚀 Quick Start
+
+### 1. Clone and Install Dependencies
 
 ```bash
-# unit tests
-$ pnpm run test
+# Clone the repository
+git clone <repository-url>
+cd ordering-app
 
-# e2e tests
-$ pnpm run test:e2e
+# Install dependencies
+pnpm install
 
-# test coverage
-$ pnpm run test:cov
+# Install RabbitMQ packages for microservices communication
+pnpm add @nestjs/microservices amqplib amqp-connection-manager @types/amqplib
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### 2. Start Infrastructure Services
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+# Start MongoDB Replica Set + RabbitMQ
+docker-compose up -d mongodb-primary mongodb-secondary mongodb-arbiter rabbitmq
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### 3. Start Development Server
 
-## Resources
+```bash
+# Start orders service with hot reload
+docker-compose up orders
 
-Check out a few resources that may come in handy when working with NestJS:
+# Or start all services
+docker-compose up
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+The orders service will be available at `http://localhost:3000`
 
-## Support
+## 🐳 Docker Development Setup
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Hot Reload Configuration
 
-## Stay in touch
+Our Docker setup provides **instant hot reload** without rebuilding containers:
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+```yaml
+# docker-compose.yml
+services:
+  orders:
+    build:
+      context: .
+      dockerfile: ./apps/orders/Dockerfile
+      target: development # Multi-stage build for development
+    command: npm run start:dev orders
+    volumes:
+      - .:/usr/src/app # Mount source code
+      - /usr/src/app/node_modules # Preserve container's node_modules
+    ports:
+      - '3000:3000'
+```
 
-## License
+### How it works:
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- ✅ **Real-time updates**: Changes in your local files are instantly reflected in the container
+- ✅ **Preserved dependencies**: `node_modules` from container are protected from local conflicts
+- ✅ **No rebuilds needed**: Only the Node.js process restarts, not the container
+- ✅ **Cross-platform**: Works consistently on Windows, Mac, and Linux
+
+## 🗄️ Database Configuration
+
+### MongoDB Replica Set
+
+The application uses a **3-node MongoDB replica set** for high availability:
+
+- **Primary Node** (`mongodb-primary:27017`) - Handles writes
+- **Secondary Node** (`mongodb-secondary:27017`) - Replication + reads
+- **Arbiter Node** (`mongodb-arbiter:27017`) - Voting in elections
+
+### Bitnami Secure Images
+
+We use `bitnamisecure/mongodb:latest` for:
+
+- 🛡️ **Enhanced Security**: Minimal attack surface with Photon Linux
+- 🔄 **Automatic Updates**: Security patches applied within hours
+- 📋 **Compliance**: Includes SBOMs, virus scans, and attestation signatures
+
+## 📨 RabbitMQ Integration
+
+### Package Installation
+
+```bash
+# Core RabbitMQ packages
+pnpm add amqplib amqp-connection-manager @types/amqplib
+
+# NestJS microservices (includes RabbitMQ integration)
+pnpm add @nestjs/microservices
+```
+
+### Event Flow Example
+
+```typescript
+// 1. Orders service publishes event
+@Post()
+async createOrder(@Body() order: any) {
+  const newOrder = await this.ordersService.createOrder(order);
+
+  // Publish to RabbitMQ
+  this.billingClient.emit('order_created', newOrder);
+
+  return newOrder;
+}
+
+// 2. Billing service consumes event
+@MessagePattern('order_created')
+async handleOrderCreated(@Payload() orderData: any) {
+  return await this.billingService.processPayment(orderData);
+}
+```
+
+## 🔧 Available Scripts
+
+```bash
+# Development
+pnpm run start:dev          # Start with watch mode
+pnpm run start:dev orders   # Start specific service
+
+# Production
+pnpm run build              # Build all services
+pnpm run start:prod         # Start production mode
+
+# Testing
+pnpm run test               # Unit tests
+pnpm run test:e2e           # End-to-end tests
+pnpm run test:cov           # Coverage report
+
+# Linting
+pnpm run lint               # ESLint
+pnpm run format             # Prettier formatting
+```
+
+## 🐋 Docker Commands
+
+```bash
+# Start all services
+docker-compose up
+
+# Start specific services
+docker-compose up orders mongodb-primary rabbitmq
+
+# Background mode
+docker-compose up -d
+
+# View logs
+docker-compose logs orders
+
+# Rebuild containers
+docker-compose build
+
+# Stop all services
+docker-compose down
+
+# Clean up volumes
+docker-compose down -v
+```
+
+## 📁 Project Structure
+
+```
+ordering-app/
+├── apps/
+│   ├── orders/           # Orders microservice
+│   ├── auth/             # Authentication service
+│   └── billing/          # Billing service
+├── libs/
+│   └── common/           # Shared libraries
+│       ├── database/     # Database abstractions
+│       └── rmq/          # RabbitMQ utilities
+├── docker-compose.yml    # Container orchestration
+└── README.md
+```
+
+## 🔧 Environment Configuration
+
+### Required Environment Variables
+
+Create `.env` files in each service directory:
+
+```bash
+# apps/orders/.env
+DATABASE_URL=mongodb://mongodb-primary:27017/orders
+RABBIT_MQ_URI=amqp://rabbitmq:5672
+RABBIT_MQ_ORDERS_QUEUE=orders_queue
+```
+
+## 🚨 Troubleshooting
+
+### MongoDB Connection Issues
+
+```bash
+# Check replica set status
+docker exec -it ordering-app-mongodb-primary-1 mongosh --eval "rs.status()"
+```
+
+### RabbitMQ Management
+
+```bash
+# Access RabbitMQ Management UI (add to docker-compose if needed)
+# http://localhost:15672
+# Default: guest/guest
+```
+
+### TypeScript Compilation Errors
+
+```bash
+# Clear build cache
+pnpm run build --force
+
+# Check for type issues
+pnpm run lint
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is [MIT licensed](LICENSE).
+
+## 🆘 Support
+
+- 📖 [NestJS Documentation](https://docs.nestjs.com)
+- 🐰 [RabbitMQ Tutorials](https://www.rabbitmq.com/tutorials)
+- 🍃 [MongoDB Replica Sets](https://docs.mongodb.com/manual/replication/)
+- 🐳 [Docker Compose Reference](https://docs.docker.com/compose/)
+
+---
+
+Built with ❤️ using NestJS and modern microservices architecture.
