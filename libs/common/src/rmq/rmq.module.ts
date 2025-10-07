@@ -23,10 +23,13 @@ export class RmqModule {
               transport: Transport.RMQ,
               options: {
                 urls: [
-                  configService.get<string>('RABBIT_MQ__URI') ??
+                  configService.get<string>('RABBIT_MQ_URI') ??
                     'amqp://localhost:5672',
                 ],
                 queue: configService.get<string>(`RABBIT_MQ_${name}_QUEUE`),
+                queueOptions: {
+                  durable: true,
+                },
               },
             }),
             inject: [ConfigService],

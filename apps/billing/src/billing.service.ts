@@ -9,6 +9,6 @@ export class BillingService {
   }
 
   bill(data: any) {
-    this.logger.log('Billing....');
+    this.logger.log('Billing....', data);
   }
 }

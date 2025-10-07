@@ -1,4 +1,14 @@
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
   orders:
     build:
       context: .
@@ -8,10 +18,14 @@ services:
     env_file:
       - ./apps/orders/.env
     depends_on:
-      - mongodb-primary
-      - mongodb-secondary
-      - mongodb-arbiter
-      - rabbitmq
+      mongodb-primary:
+        condition: service_started
+      mongodb-secondary:
+        condition: service_started
+      mongodb-arbiter:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
@@ -27,18 +41,18 @@ services:
     env_file:
       - ./apps/billing/.env
     depends_on:
-      - mongodb-primary
-      - mongodb-secondary
-      - mongodb-arbiter
-      - rabbitmq
+      mongodb-primary:
+        condition: service_started
+      mongodb-secondary:
+        condition: service_started
+      mongodb-arbiter:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     volumes:
       - .:/usr/src/app
       - /usr/src/app/node_modules
 
-  rabbitmq:
-    image: rabbitmq
-    ports:
-      - "5672:5672"
   mongodb-primary:
     image: docker.io/bitnamisecure/mongodb
     environment:

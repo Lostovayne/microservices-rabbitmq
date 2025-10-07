@@ -1,7 +1,8 @@
 /** biome-ignore-all lint/style/useImportType: Biome me estaba trolleando */
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { type RmqOptions, Transport } from '@nestjs/microservices';
+import { RmqContext, type RmqOptions, Transport } from '@nestjs/microservices';
+import type { Channel, Message } from 'amqplib';
 
 @Injectable()
 export class RmqService {
@@ -16,9 +17,18 @@ export class RmqService {
             'amqp://localhost:5672',
         ],
         queue: this.configService.get<string>(`RABBIT_MQ_${queue}_QUEUE`),
-        noAck,
+        noAck, // Reconocer manualmente que hemos aceptado el mensaje
         persistent: true,
       },
     };
+  }
+
+  ack(context: RmqContext) {
+    const channel = context.getChannelRef() as Channel;
+    const originalMessage = context.getMessage() as Message | undefined;
+    if (!originalMessage) {
+      return;
+    }
+    channel.ack(originalMessage);
   }
 }
